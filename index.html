@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Bulk Messenger</title>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-2xl font-bold text-center mb-8 text-teal-600">
+                <i class="bi bi-whatsapp mr-2"></i>WhatsApp Bulk Messenger
+            </h1>
+
+            <!-- File Upload Section -->
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-3 text-gray-700">1. Upload Contact List (Excel)</h2>
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    <input type="file" id="excelFile" accept=".xlsx,.xls" class="hidden" onchange="handleFileUpload(event)">
+                    <label for="excelFile" class="cursor-pointer">
+                        <i class="bi bi-file-earmark-spreadsheet text-4xl text-teal-500"></i>
+                        <p class="mt-2 text-sm text-gray-600">Click to upload Excel file or drag and drop</p>
+                    </label>
+                </div>
+                <div id="fileInfo" class="mt-2 text-sm text-gray-600"></div>
+            </div>
+
+            <!-- Preview Section -->
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-3 text-gray-700">2. Contact Preview</h2>
+                <div class="overflow-x-auto">
+                    <table id="previewTable" class="min-w-full bg-white border border-gray-200 hidden">
+                        <thead class="bg-gray-50">
+                            <tr id="headerRow"></tr>
+                        </thead>
+                        <tbody id="dataRows"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Message Template Section -->
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-3 text-gray-700">3. Message Template</h2>
+                <div class="space-y-4">
+                    <div>
+                        <p class="text-sm text-gray-600 mb-2">Available variables: {name}, {company}, etc.</p>
+                        <textarea id="messageTemplate" rows="4" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent" placeholder="Hello {name}, ..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex justify-end space-x-4">
+                <button onclick="previewMessage()" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition">
+                    Preview
+                </button>
+                <button onclick="sendMessages()" class="px-4 py-2 bg-teal-500 text-white rounded hover:bg-teal-600 transition">
+                    Send Messages
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="previewModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+        <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+            <h3 class="text-lg font-semibold mb-4">Message Preview</h3>
+            <div id="previewContent" class="bg-gray-50 p-4 rounded mb-4"></div>
+            <div class="flex justify-end">
+                <button onclick="closePreview()" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let excelData = null;
+        let headers = [];
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                excelData = XLSX.utils.sheet_to_json(firstSheet);
+                headers = Object.keys(excelData[0]);
+                
+                document.getElementById('fileInfo').textContent = `Loaded ${excelData.length} contacts`;
+                displayPreview();
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function displayPreview() {
+            const table = document.getElementById('previewTable');
+            const headerRow = document.getElementById('headerRow');
+            const dataRows = document.getElementById('dataRows');
+
+            // Clear existing content
+            headerRow.innerHTML = '';
+            dataRows.innerHTML = '';
+
+            // Add headers
+            headers.forEach(header => {
+                headerRow.innerHTML += `<th class="px-4 py-2 text-left text-sm font-semibold text-gray-600">${header}</th>`;
+            });
+
+            // Add data rows (limit to first 5)
+            excelData.slice(0, 5).forEach(row => {
+                let tr = document.createElement('tr');
+                headers.forEach(header => {
+                    tr.innerHTML += `<td class="px-4 py-2 border-t border-gray-200">${row[header]}</td>`;
+                });
+                dataRows.appendChild(tr);
+            });
+
+            table.classList.remove('hidden');
+        }
+
+        function previewMessage() {
+            if (!excelData || !excelData.length) {
+                alert('Please upload an Excel file first');
+                return;
+            }
+
+            const template = document.getElementById('messageTemplate').value;
+            const sampleData = excelData[0];
+            let previewText = template;
+
+            // Replace variables in template
+            Object.keys(sampleData).forEach(key => {
+                previewText = previewText.replace(new RegExp(`{${key}}`, 'g'), sampleData[key]);
+            });
+
+            document.getElementById('previewContent').textContent = previewText;
+            document.getElementById('previewModal').style.display = 'flex';
+        }
+
+        function closePreview() {
+            document.getElementById('previewModal').style.display = 'none';
+        }
+
+        function sendMessages() {
+            if (!excelData || !excelData.length) {
+                alert('Please upload an Excel file first');
+                return;
+            }
+
+            const template = document.getElementById('messageTemplate').value;
+            if (!template) {
+                alert('Please enter a message template');
+                return;
+            }
+
+            // For each contact, generate their personalized message and open in WhatsApp
+            excelData.forEach(contact => {
+                let message = template;
+                Object.keys(contact).forEach(key => {
+                    message = message.replace(new RegExp(`{${key}}`, 'g'), contact[key]);
+                });
+
+                // Ensure phone number is in correct format
+                let phone = contact.phone || contact.Phone || contact.mobile || contact.Mobile;
+                if (phone) {
+                    phone = phone.toString().replace(/[^0-9]/g, '');
+                    const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+                    window.open(whatsappUrl, '_blank');
+                }
+            });
+        }
+
+        // Drag and drop functionality
+        const dropZone = document.querySelector('.border-dashed');
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-teal-500');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-teal-500');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-teal-500');
+            const file = e.dataTransfer.files[0];
+            if (file.type.includes('sheet') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                document.getElementById('excelFile').files = e.dataTransfer.files;
+                handleFileUpload({target: {files: [file]}});
+            } else {
+                alert('Please upload an Excel file');
+            }
+        });
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
